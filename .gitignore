@@ -18,3 +18,5 @@ light-footprint-removal/rose_inputs/orbit_frames/
 *.log
 *.out
 *.synctex.gz
+light-footprint-removal 4/
+light-footprint-removal-*.zip

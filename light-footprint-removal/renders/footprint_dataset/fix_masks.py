@@ -9,26 +9,25 @@ import math
 import json
 import os
 
-# ----------------------------- CONFIG ---------------------------------------
+# config
 OUT_DIR   = os.path.join(os.path.expanduser("~"), "footprint_dataset")
-N_FRAMES  = 81          # matches typical video-model clip length
-RES_X     = 832         # ~480p, a size video models accept
+N_FRAMES  = 81          # video models want 16n+1 frames
+RES_X     = 832         # native VACE/ROSE resolution
 RES_Y     = 480
-SAMPLES   = 64          # Cycles samples; raise to 128+ for final data
-RADIUS    = 5.5         # camera distance from the pivot
-CAM_Z     = 1.5         # camera height; lower = more grazing view = stronger reflection
-ARC_DEG   = 120         # orbit arc in degrees, centred on the front of the scene
-QUICK_TEST = False       # True -> renders only 3 frames at low quality, to check setup
-# -----------------------------------------------------------------------------
+SAMPLES   = 64          # raise to 128+ for final data
+RADIUS    = 5.5
+CAM_Z     = 1.5         # lower camera = more grazing view = stronger floor reflection
+ARC_DEG   = 120
+QUICK_TEST = False      # 3 frames at low quality, to check the setup
+
 
 if QUICK_TEST:
     N_FRAMES, SAMPLES = 3, 8
 
-SCENE_CENTRE = (0.0, 1.2, 0.0)   # the object sits here; camera & light aim near it
+SCENE_CENTRE = (0.0, 1.2, 0.0)
 
 
 def clean_scene():
-    """Remove every object in the current file (works in GUI and headless)."""
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
 
@@ -80,7 +79,7 @@ def new_empty(name, location):
 
 
 def aim_at(obj, target):
-    """Track-To constraint with the right axes for cameras and lights (-Z forward)."""
+    # cameras and lights both point down -Z
     c = obj.constraints.new(type="TRACK_TO")
     c.target = target
     c.track_axis = "TRACK_NEGATIVE_Z"
@@ -91,7 +90,7 @@ def aim_at(obj, target):
 def build_scene():
     scn = bpy.context.scene
 
-    # --- renderer -------------------------------------------------------------
+    # renderer
     scn.render.engine = "CYCLES"
     scn.cycles.samples = SAMPLES
     scn.cycles.use_denoising = True
@@ -108,7 +107,7 @@ def build_scene():
     except Exception:
         scn.cycles.device = "CPU"
 
-    # --- world (dim ambient so the shadow stays crisp) ------------------------
+    # dim ambient so the shadow stays crisp
     world = bpy.data.worlds.new("World")
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
@@ -116,45 +115,42 @@ def build_scene():
     bg.inputs[1].default_value = 1.0
     scn.world = world
 
-    # --- polished floor (REFLECTION via Fresnel + diffuse base shows SHADOW) --
-    # NOTE: not metallic! A pure-metal mirror has no diffuse response, so
-    # shadows are invisible on it. A polished dielectric shows both effects.
+    # floor must be a polished dielectric, not metal: a pure-specular floor has
+    # no diffuse response, so a shadow would be invisible on it
     floor = new_plane("Floor", 20, (0, 0, 0))
     floor.data.materials.append(
         make_material("GlossyFloor", (0.38, 0.38, 0.42), metallic=0.0, roughness=0.04))
 
-    # --- white back wall, close to the object (COLOUR BLEED lands here) -------
+    # white wall close behind the object catches the colour bleed
     wall = new_plane("Wall", 24, (0, 2.4, 3.0), rotation=(math.radians(90), 0, 0))
     wall.data.materials.append(
         make_material("WhiteWall", (0.9, 0.9, 0.9), roughness=0.9))
 
-    # --- vertical MIRROR panel to the right (unmistakable reflection) ---------
-    # against the back wall, facing the camera, offset right of the sphere:
-    # the camera then sees the sphere AND its mirror image side by side.
+    # mirror panel angled so sphere and mirror image are in frame together
     mirror = new_plane("Mirror", 2.8, (1.4, 2.0, 1.2),
                        rotation=(math.radians(90), 0, math.radians(-15)))
     mirror.data.materials.append(
         make_material("Mirror", (0.92, 0.92, 0.92), metallic=1.0, roughness=0.01))
 
-    # --- the target object: a saturated red sphere ("the vase") ---------------
+
     target = new_sphere("TargetObject", 0.55, (SCENE_CENTRE[0], SCENE_CENTRE[1], 0.55))
     target.data.materials.append(
         make_material("RedObject", (0.85, 0.04, 0.04), roughness=0.35))
-    target.pass_index = 1          # lets the renderer mark its pixels (mask pass)
+    target.pass_index = 1
 
-    # --- look-at target for camera and light ----------------------------------
+
     lookat = new_empty("LookAt", (SCENE_CENTRE[0], SCENE_CENTRE[1], 0.6))
 
-    # --- one area light from the side (this is what makes the SHADOW) ---------
+    # small key light -> hard shadow
     light_data = bpy.data.lights.new("KeyLight", type="AREA")
     light_data.energy = 800
-    light_data.size = 1.0          # smaller light -> harder, more visible shadow
+    light_data.size = 1.0
     light = link(bpy.data.objects.new("KeyLight", light_data))
     light.location = (-3.0, -1.5, 3.5)
     aim_at(light, lookat)
 
-    # low-power fill from the mirror's side, so the sphere's far side (the one
-    # the mirror sees) is lit and its mirror image reads clearly
+    # fill from the mirror's side: the mirror sees the sphere's unlit face,
+    # which reads as a black blob without this
     fill_data = bpy.data.lights.new("FillLight", type="AREA")
     fill_data.energy = 250
     fill_data.size = 2.0
@@ -162,19 +158,18 @@ def build_scene():
     fill.location = (3.5, -0.5, 2.5)
     aim_at(fill, lookat)
 
-    # --- camera on an orbiting pivot ------------------------------------------
+
     pivot = new_empty("OrbitPivot", SCENE_CENTRE)
 
     cam_data = bpy.data.cameras.new("OrbitCam")
     cam = link(bpy.data.objects.new("OrbitCam", cam_data))
     cam.parent = pivot
-    cam.location = (0, -RADIUS, CAM_Z)   # local to the pivot -> true orbit radius
+    cam.location = (0, -RADIUS, CAM_Z)   # local to pivot -> true orbit radius
     aim_at(cam, lookat)
     scn.camera = cam
 
-    # animate the pivot: arc from -ARC/2 to +ARC/2.
-    # One exact keyframe per frame -> interpolation mode is irrelevant,
-    # which keeps this working across Blender API versions.
+    # one keyframe per frame, so the interpolation mode (which changed across
+    # Blender API versions) never matters
     half = math.radians(ARC_DEG / 2.0)
     for f in range(1, N_FRAMES + 1):
         t = (f - 1) / max(N_FRAMES - 1, 1)
@@ -185,14 +180,12 @@ def build_scene():
 
 
 def enable_passes():
-    """Depth + object-index passes; written into the multilayer EXRs."""
     vl = bpy.context.scene.view_layers[0]
     vl.use_pass_z = True
     vl.use_pass_object_index = True
 
 
 def render_rgb(mode_dir):
-    """Normal colour render -> PNG sequence."""
     scn = bpy.context.scene
     scn.cycles.samples = SAMPLES
     scn.cycles.use_denoising = True
@@ -244,7 +237,7 @@ SCRIPT_VERSION = "v14-maskfix"
 
 
 def main():
-    print(f"=== make_scene {SCRIPT_VERSION} running ===")
+    print(f"fix_masks {SCRIPT_VERSION}")
     clean_scene()
     target, cam = build_scene()
 
@@ -255,10 +248,10 @@ def main():
 
     mode_dir = os.path.join(OUT_DIR, "with")
     os.makedirs(os.path.join(mode_dir, "mask_raw"), exist_ok=True)
-    print("--- re-rendering mask pass only (fast) ---")
+    print("re-rendering mask pass")
     render_mask(mode_dir)
 
-    print("Done. Dataset written to", OUT_DIR)
+    print("done:", OUT_DIR)
 
 
 main()

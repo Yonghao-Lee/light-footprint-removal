@@ -14,7 +14,7 @@ import math
 import json
 import os
 
-# ----------------------------- CONFIG ---------------------------------------
+# config
 OUT_DIR   = os.path.join(os.path.expanduser("~"), "footprint_dataset")
 N_FRAMES  = 81          # video models want 16n+1 frames
 RES_X     = 832         # native VACE/ROSE resolution
@@ -24,7 +24,7 @@ RADIUS    = 5.5
 CAM_Z     = 1.5         # lower camera = more grazing view = stronger floor reflection
 ARC_DEG   = 120
 QUICK_TEST = False      # 3 frames at low quality, to check the setup
-# -----------------------------------------------------------------------------
+
 
 if QUICK_TEST:
     N_FRAMES, SAMPLES = 3, 8
@@ -95,7 +95,7 @@ def aim_at(obj, target):
 def build_scene():
     scn = bpy.context.scene
 
-    # --- renderer -------------------------------------------------------------
+    # renderer
     scn.render.engine = "CYCLES"
     scn.cycles.samples = SAMPLES
     scn.cycles.use_denoising = True
@@ -240,7 +240,7 @@ SCRIPT_VERSION = "v13-full"
 
 
 def main():
-    print(f"=== make_scene {SCRIPT_VERSION} running ===")
+    print(f"make_scene {SCRIPT_VERSION}")
     clean_scene()
     target, cam = build_scene()
 
@@ -254,14 +254,14 @@ def main():
         target.hide_render = (mode == "without")
         mode_dir = os.path.join(OUT_DIR, mode)
         os.makedirs(os.path.join(mode_dir, "rgb"), exist_ok=True)
-        print(f"--- rendering '{mode}' RGB ({N_FRAMES} frames) ---")
+        print(f"rendering '{mode}' rgb, {N_FRAMES} frames")
         render_rgb(mode_dir)
         if mode == "with":
             os.makedirs(os.path.join(mode_dir, "mask_raw"), exist_ok=True)
-            print(f"--- rendering '{mode}' mask pass ---")
+            print(f"rendering '{mode}' mask pass")
             render_mask(mode_dir)
 
-    print("Done. Dataset written to", OUT_DIR)
+    print("done:", OUT_DIR)
 
 
 main()

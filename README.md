@@ -6,6 +6,10 @@ no COLMAP. Render an orbit from the scene, let a removal-specialised video
 diffusion prior (ROSE) edit it under masks propagated by SAM 2 from **four
 clicks on a single frame**, and re-fit a fresh 3DGS on the result.
 
+**Stack**: PyTorch · nerfstudio (3D Gaussian Splatting) · video diffusion
+(Wan2.1-VACE, ROSE) · SAM 2 · Blender/Cycles · evaluated on a purpose-built
+benchmark with pixel-exact ground truth.
+
 ![Before / after: orbit of the original scene next to the same orbit after ROSE removal with 4-click SAM 2 masks](figures/before_after.gif)
 
 *Left: original scene. Right: after removal — object, shadow, mirror image and
@@ -83,7 +87,7 @@ one is qualitative.
   | 5 | `phase5_sam2_rose` | 4-click SAM 2 protocol + ROSE |
   | 6 | `phase6_real_demo` | qualitative real-capture demo (Mip-NeRF 360 garden) |
 - `figures/`, `videos/`, `results.md`, `report.pdf` — results and write-up.
-- `docs/` — proposal and course materials.
+- `docs/` — the original project proposal.
 
 ## Reproduce
 
@@ -103,6 +107,6 @@ all orchestration are by the author. Third-party components used unmodified:
 [ROSE](https://github.com/Kunbyte-AI/ROSE), and
 [SAM 2](https://github.com/facebookresearch/sam2).
 Benchmark inspired by the paired-evaluation philosophy of SPIn-NeRF and
-Remove360. Built as a final project for *Deep Learning for 3D Computer Vision*,
-HUJI. AI coding assistance (Claude) was used for development and debugging;
-all results were produced and verified by the author.
+Remove360. Originated as a research project in *Deep Learning for 3D Computer
+Vision* at HUJI. AI coding assistance (Claude) was used for development and
+debugging; all results were produced and verified by the author. MIT licensed.

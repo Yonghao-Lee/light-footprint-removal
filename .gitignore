@@ -1,0 +1,19 @@
+.venv/
+.idea/
+.mcp.json
+__pycache__/
+.DS_Store
+
+# Heavy experiment artifacts live on Google Drive (see README), not in git:
+light-footprint-removal/checkpoints/
+light-footprint-removal/renders/footprint_dataset/with/
+light-footprint-removal/renders/footprint_dataset/without/
+light-footprint-removal/renders/footprint_dataset/mask*/
+light-footprint-removal/renders/footprint_dataset/_old_scripts/mask_raw_r2/
+light-footprint-removal/rose_inputs/orbit_frames/
+
+# LaTeX build files
+*.aux
+*.log
+*.out
+*.synctex.gz

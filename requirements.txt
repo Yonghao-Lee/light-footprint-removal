@@ -1,0 +1,19 @@
+# Core dependencies (the notebooks install these in-cell on Colab; pins match
+# the install cells actually used in the experiments, August 2026).
+nerfstudio                  # splatfacto training / eval / render (latest at run time)
+torch>=2.3
+torchvision
+diffusers>=0.34             # WanVACEPipeline (Wan2.1-VACE-1.3B)
+transformers==4.46.2        # pinned for ROSE's diffusers dependency
+tokenizers>=0.20,<0.21
+huggingface_hub==0.36.2
+accelerate
+ftfy
+numpy==2.0.2                # checkpoint compatibility (pinned last in notebooks)
+pillow
+imageio
+imageio-ffmpeg
+matplotlib
+opencv-python
+# SAM 2.1 video predictor: pip install "git+https://github.com/facebookresearch/sam2.git"
+# Scene generation (run inside Blender >= 4.0, not pip): make_scene.py

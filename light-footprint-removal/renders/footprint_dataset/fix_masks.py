@@ -1,15 +1,7 @@
-# make_scene.py — builds the light-footprint benchmark scene and renders the dataset.
-# v2: uses Blender's data API only (no context-dependent ops), so it runs the same
-#     from the Scripting tab or headless (blender -b -P make_scene.py).
-#
-# Output (under OUT_DIR):
-#   with/rgb/0001.png ...               orbit rendered WITH the object
-#   with/depth/0001.exr ...             per-frame depth (Z pass)
-#   with/mask/0001.png ...              per-frame object silhouette (index pass)
-#   without/rgb/0001.png ...            identical orbit WITHOUT the object = clean plate
-#   transforms.json                     camera poses, NeRF-synthetic style
-#
-# Edit the CONFIG block, nothing else, on first use.
+# fix_masks.py — re-renders only with/mask_raw for an existing dataset.
+# Earlier mask renders hid just the floor and wall, so the mirror leaked into
+# the silhouettes; this version hides every mesh except the target.
+# Run like make_scene.py: blender -b -P fix_masks.py
 
 import bpy
 import bmesh

@@ -1,11 +1,6 @@
-# extract_aux.py — turns the mask_raw renders (RGBA PNGs with transparent
-# background) into clean binary mask PNGs.
-#
-# Run OUTSIDE Blender, with plain Python (locally or in Colab):
-#   pip install numpy pillow
+# extract_aux.py — thresholds the alpha channel of the mask_raw renders into
+# binary mask PNGs. Plain Python, no Blender:
 #   python extract_aux.py ~/footprint_dataset/with
-#
-# (argument = the mode folder that contains the 'mask_raw' subfolder)
 
 import sys
 import os

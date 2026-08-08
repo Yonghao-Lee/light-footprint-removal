@@ -11,6 +11,11 @@ qualitative results.
 
 Final project, *Deep Learning for 3D Computer Vision*, HUJI (instructor: Sagie Benaim).
 
+![Before / after: orbit of the original scene next to the same orbit after ROSE removal with 4-click SAM 2 masks](figures/before_after.gif)
+
+*Left: original scene. Right: after removal — object, shadow, mirror image and floor
+reflection gone together. Full-resolution videos in [`videos/`](videos/).*
+
 ## Repository layout
 
 - `light-footprint-removal/renders/footprint_dataset/make_scene.py` — Blender/Cycles

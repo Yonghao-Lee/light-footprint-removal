@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 
 # Heavy experiment artifacts live on Google Drive (see README), not in git:
+light-footprint-removal 3/
 light-footprint-removal/checkpoints/
 light-footprint-removal/renders/footprint_dataset/with/
 light-footprint-removal/renders/footprint_dataset/without/

@@ -29,6 +29,8 @@ reflection gone together. Full-resolution videos in [`videos/`](videos/).*
   3. `phase4_vace_edit_and_refit.ipynb` — VACE edits, mask protocols, re-fit + scoring for all methods.
   4. `phase4b_rose.ipynb` — ROSE edits (object / oracle masks).
   5. `phase5_sam2_rose.ipynb` — 4-click SAM 2 mask propagation + ROSE edit.
+  6. `phase6_real_demo.ipynb` — qualitative real-capture demo on Mip-NeRF 360
+     "garden" (fit → orbit → clicks → ROSE → refit → before/after video).
 - `figures/`, `videos/`, `results.md` — collected results.
 
 ## Reproduce

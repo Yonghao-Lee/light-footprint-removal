@@ -3,7 +3,6 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{booktabs}
-
 \usepackage[hidelinks]{hyperref}
 \renewcommand{\labelitemi}{$\bullet$}
 
@@ -21,7 +20,10 @@
 Deleting an object from a reconstructed 3D Gaussian Splatting (3DGS) scene removes its geometry but not its light footprint: the shadow it casts, its image in nearby mirrors, and the colour it bleeds onto surrounding surfaces all survive as painted-on texture. We study whether a pretrained video prior can remove this footprint through a simple \emph{render--edit--refit} pipeline: render an orbit from the fitted scene, edit the video with a diffusion prior, and re-fit a fresh 3DGS on the edited frames. To measure the problem exactly, we built a synthetic benchmark in which the same camera path is rendered with and without the object, giving pixel-exact clean plates and automatically derived footprint regions. Our central negative finding is that a strong generalist editor (VACE) does not remove: it \emph{substitutes}, replacing the masked object with a new one --- and, given only the object mask, it reconstructs the object from its own shadow and reflection. A removal-specialised prior (ROSE) with masks covering the footprint behaves differently: footprint-region PSNR improves from 14.2\,dB (deletion) to 28.4\,dB. The masks need not be oracles --- four clicks on a single frame, propagated by SAM~2, match oracle-mask performance (31.3 vs.\ 31.1\,dB full-frame). Finally, the edits survive the lift back to 3D: all numbers are measured on held-out novel views rendered from the re-fitted scene, without any explicit multi-view consistency mechanism.
 \end{abstract}
 
-\section{Introduction}
+\section{Introduction and Related Work}
+\label{sec:intro}
+
+\subsection{Problem}
 Imagine a red vase standing on a polished floor in front of a wall mirror. A 3D reconstruction of this room --- here, a 3D Gaussian Splatting model \cite{kerbl3dgs} --- stores the vase's geometry, but it also stores everything the vase \emph{does to the light}: the shadow it casts on the floor, its image in the mirror, the faint red glow it bleeds onto the wall. Formally, the radiance the scene records is
 \[
 L \;=\; L_{\mathrm{direct}} \;+\; L_{\mathrm{obj}},
@@ -38,7 +40,7 @@ Our contributions are:
   \item \textbf{A practical annotation protocol}: four clicks on one frame, propagated by SAM~2, match oracle footprint localization (Section~\ref{sec:practical}).
 \end{enumerate}
 
-\section{Related Work}
+\subsection{Related work}
 \paragraph{Object removal and 3D inpainting.}
 Removal from radiance fields is usually cast as segmentation plus inpainting: SPIn-NeRF \cite{spinnerf} lifts multiview masks and inpaints with a 2D prior; Weder et al.\ \cite{weder} learn view-consistent inpainting confidence; OR-NeRF \cite{ornerf} propagates user clicks with SAM \cite{sam}. In the 3DGS setting, GScream \cite{gscream} and Gaussian Grouping \cite{gaussiangrouping} segment and delete Gaussians before repairing the hole. These methods focus on the hole the object leaves in geometry; the footprint on \emph{other} surfaces is out of scope.
 
@@ -56,18 +58,32 @@ VACE \cite{vace} is a strong general video creation-and-editing model; ROSE \cit
 
 To our knowledge, no prior work provides a controlled benchmark that measures, per physical effect and in 3D, what object removal leaves behind --- the gap this project addresses.
 
-\section{Benchmark}
+\section{Method}
+\label{sec:method}
+
+\subsection{Overview: render--edit--refit}
+Given a 3DGS scene containing an unwanted object, the pipeline is:
+\begin{enumerate}
+  \item \textbf{Reconstruct} a standard 3DGS from the scene images (object present).
+  \item \textbf{Render an orbit}: a smooth camera path rendered from the fitted scene, so every frame comes with an exactly known pose.
+  \item \textbf{Edit the video} with a pretrained video diffusion prior under a binary mask (white $=$ edit, black $=$ keep).
+  \item \textbf{Re-fit} a fresh 3DGS on the edited frames with the unchanged poses.
+\end{enumerate}
+We chose this design over the two main alternatives deliberately. Full inverse rendering \cite{irgs} would model the footprint physically but constrains scene materials and lighting and is expensive to fit; iterative edit-and-optimise loops \cite{in2n,igs2gs} interleave many partial edits with 3D updates to enforce consistency, at several times the compute. Render--edit--refit is the cheapest member of this family --- one edit, one re-fit --- and part of our experimental question is precisely whether the expensive machinery is needed (Section~\ref{sec:consistency}). The pipeline trains no networks and needs no COLMAP: poses come from the orbit renderer.
+
+\subsection{Benchmark design}
 \label{sec:benchmark}
-The benchmark is one compact Blender/Cycles scene --- a red sphere on a floor, a white wall, and a wall mirror --- rendered along an 81-frame, $120^\circ$ camera arc at $832{\times}480$, twice: once with the object and once without, with identical cameras and lighting (Figure~\ref{fig:dataset}). The design of the scene is the result of iterating against an explicit checklist (every footprint effect must be visible to the eye in the renders), and several choices carry the lessons of that iteration:
+Measuring footprint removal requires knowing exactly what the scene looks like \emph{without} the object --- unknowable for a real scene, exact for a synthetic one. The benchmark is one compact Blender/Cycles scene --- a red sphere on a floor, a white wall, and a wall mirror --- rendered along an 81-frame, $120^\circ$ camera arc at $832{\times}480$ (Cycles, 64 samples, denoised), twice: once with the object and once without, with identical cameras and lighting (Figure~\ref{fig:dataset}). The scene was iterated against an explicit checklist (every footprint effect must be visible to the eye), and several design choices carry the lessons of that iteration:
 
 \begin{itemize}
-  \item \textbf{Polished dielectric floor, not a metallic mirror floor.} Our first floor was metallic: it produced a beautiful reflection and \emph{no visible shadow}, because a pure specular surface has no diffuse response for a shadow to darken. A glossy dielectric floor shows both a soft reflection and a clear shadow.
-  \item \textbf{A separate vertical mirror panel.} At our viewing angles, dielectric Fresnel reflection on the floor is too weak to serve as the headline mirror effect; a dedicated mirror gives the footprint a second, unambiguous component.
-  \item \textbf{A fill light.} A mirror faithfully shows the \emph{unlit} side of the object; without a fill light the mirror image is a dark, unrecognisable blob.
-  \item \textbf{Shared cameras $\Rightarrow$ exact clean plates.} Because the with/without renders share every camera, the without-render \emph{is} the ground-truth answer to ``what should removal produce?'' --- no inpainting benchmark ambiguity. Differencing the two renders outside the object silhouette yields per-region footprint masks (shadow, mirror image, floor reflection, wall bleed) with no manual annotation.
-  \item \textbf{$832{\times}480$, 81 frames.} This matches the native resolution of the video models we evaluate and satisfies their $16n{+}1$ frame-count constraint, so the editor never resamples our data.
-  \item \textbf{Every 8th frame held out.} All metrics in this report are computed on the 11 held-out views, rendered from a re-fitted 3DGS --- novel-view quality, not training-view quality. We note honestly that these views interpolate the arc; extrapolation far off the arc is not measured.
+  \item \textbf{Polished dielectric floor, not a metallic mirror floor.} Our first floor was metallic: it produced a beautiful reflection and \emph{no visible shadow}, because a pure specular surface has no diffuse response for a shadow to darken. A glossy dielectric floor (roughness 0.04) shows both a soft reflection and a clear shadow.
+  \item \textbf{A separate vertical mirror panel} (metallic, roughness 0.01). At our viewing angles, dielectric Fresnel reflection on the floor is too weak to serve as the headline mirror effect; a dedicated mirror gives the footprint a second, unambiguous component.
+  \item \textbf{A fill light.} A mirror faithfully shows the \emph{unlit} side of the object; without a fill light the mirror image is a dark, unrecognisable blob. The key light is a small area light (harder shadow); the fill is weaker and sits on the mirror's side.
+  \item \textbf{Shared cameras $\Rightarrow$ exact clean plates.} Because the with/without renders share every camera, the without-render \emph{is} the ground-truth answer to ``what should removal produce?'' Differencing the two renders outside the object silhouette yields footprint masks (shadow, mirror image, floor reflection, wall bleed) with no manual annotation.
+  \item \textbf{$832{\times}480$, 81 frames} matches the native resolution of the video models we evaluate and their $16n{+}1$ frame-count constraint, so the editor never resamples our data.
+  \item \textbf{Every 8th frame held out.} All metrics are computed on the 11 held-out views, rendered from a re-fitted 3DGS --- novel-view quality, not training-view quality. These views interpolate the arc; extrapolation far off the arc is not measured.
 \end{itemize}
+Object silhouettes are obtained by re-rendering the scene with only the object visible on a transparent background and thresholding the alpha channel at $0.5$ --- one Blender pass, no segmentation model in the loop.
 
 \begin{figure}[t]
   \centering
@@ -76,30 +92,48 @@ The benchmark is one compact Blender/Cycles scene --- a red sphere on a floor, a
   \label{fig:dataset}
 \end{figure}
 
-\section{Method: Render--Edit--Refit}
-\label{sec:method}
-The pipeline has four steps, none of which trains or modifies a model.
+\subsection{Reconstruction and re-fitting}
+\label{sec:recon}
+Both the initial fit and every re-fit use \texttt{splatfacto}, nerfstudio's 3DGS implementation, with an identical recipe: 15{,}000 iterations, photometric loss
+\[
+\mathcal{L} \;=\; (1-\lambda)\,\mathcal{L}_1 \;+\; \lambda\,\bigl(1-\mathrm{SSIM}\bigr), \qquad \lambda = 0.2,
+\]
+following the original 3DGS formulation \cite{kerbl3dgs}, with nerfstudio's default densification schedule and learning rates. We use \emph{random point initialisation} rather than an SfM point cloud: the poses are exact and the scene is bounded, the regime in which the original 3DGS paper found random init competitive \cite{kerbl3dgs} --- and it removes COLMAP from the pipeline entirely. The re-fit trains \emph{from scratch} on the 70 edited training frames with the unchanged poses; no keep-loss or edit-region masking is applied, so any drift in unedited regions is deliberately left in and captured by the full-frame metric.
 
-\textbf{Step 1 --- Reconstruct.} We fitted \texttt{splatfacto} (nerfstudio's 3DGS) for 15{,}000 iterations on the 70 training frames of the with-object renders. Because the poses are exact and the scene is bounded, we used random point initialisation rather than an SfM point cloud, following the original 3DGS finding that synthetic bounded scenes tolerate random init \cite{kerbl3dgs}; this also removes COLMAP from the pipeline entirely.
+\subsection{Video editors}
+\label{sec:editors}
+We evaluate one generalist and one specialist editor, both small enough for a single Colab GPU:
 
-\textbf{Step 2 --- Render an orbit.} From the fitted scene we rendered all 81 poses of the arc. In the general (real-scene) case this step is what buys exact known poses for every edited frame; in our benchmark the poses are known anyway, which lets us validate the pipeline itself.
+\textbf{VACE} \cite{vace} (Wan2.1-VACE-1.3B): a DiT-based video diffusion model that conditions on a source video, a mask video, and a text prompt. We run 30 denoising steps at guidance scale 5.0 with a fixed seed, keeping the VAE at fp32 (bf16 VAE caused visible colour banding). Prompts describe the \emph{target} state (``an empty room \dots\ nothing on the floor'') and the negative prompt names the footprint effects (``red sphere, \dots\ shadow of an object on the floor, pink glow'').
 
-\textbf{Step 3 --- Edit the video.} A pretrained video diffusion prior edits the orbit under a binary mask video (white $=$ edit, black $=$ keep). We evaluate two editors: VACE (Wan2.1-VACE-1.3B \cite{vace}; 30 denoising steps, guidance 5.0, seeded, VAE kept at fp32 to avoid colour banding), prompted with a description of the \emph{target} state (``an empty room \dots\ nothing on the floor'') and a negative prompt naming the footprint effects; and ROSE \cite{rose} (Wan2.1-Fun-1.3B-InP base with the ROSE fine-tuned transformer, 50 steps), which takes only video~$+$~mask.
+\textbf{ROSE} \cite{rose}: a removal-specialised editor built on Wan2.1-Fun-1.3B-InP (a video inpainting variant), whose transformer was fine-tuned by its authors on paired videos of scenes with and without objects, explicitly including side effects such as shadows and reflections. ROSE takes only video $+$ mask (50 steps, the authors' inference script and defaults); no prompt engineering is possible, which makes it a clean test of what the prior itself learned.
 
-Three mask protocols are compared, stated precisely:
+\subsection{Mask protocols}
+\label{sec:masks}
+The editors edit only inside the mask, so mask coverage is a first-class experimental variable. Three protocols, stated precisely:
 \begin{itemize}
-  \item \textbf{Object mask}: the object silhouette (from the renderer's object index pass; in a real scene, SAM), dilated by 25\,px.
-  \item \textbf{Oracle mask}: all pixels that differ between the with/without renders --- object \emph{and} footprint --- dilated by 15\,px. This uses ground truth and is labelled an upper bound.
-  \item \textbf{Practical mask}: four clicks on one frame propagated by SAM~2 across all 81 frames, unioned and dilated by 15\,px (Section~\ref{sec:practical}).
+  \item \textbf{Object mask}: the object silhouette (from the renderer's index pass; in a real scene, SAM), dilated by 25\,px. This is what a standard removal pipeline would use.
+  \item \textbf{Oracle mask}: all pixels that differ between the with/without renders by more than $0.05$ in any channel --- object \emph{and} footprint --- union the silhouette, dilated by 15\,px. This uses ground truth and is labelled an upper bound on localization.
+  \item \textbf{Practical mask}: four clicks on one frame (object, mirror image, shadow, floor reflection), propagated bidirectionally across all 81 frames by the SAM~2.1 hiera-large video predictor \cite{sam2}, one tracked region per click; per-frame union of the four regions, dilated by 15\,px.
 \end{itemize}
 
-\textbf{Step 4 --- Re-fit.} A fresh \texttt{splatfacto} is trained on the edited frames with the \emph{unchanged} poses, using the identical recipe as Step~1 (15k iterations, random init). No keep-loss or masking is applied at re-fit; unedited-region fidelity is therefore captured by the full-frame metric.
+\subsection{Implementation}
+\label{sec:implementation}
+All code is in the submitted repository: a Blender/Cycles scene-and-dataset generator (\texttt{make\_scene.py}, \texttt{extract\_aux.py}) and five Colab notebooks covering reconstruction, deletion baseline, VACE editing $+$ re-fitting $+$ scoring, ROSE editing, and the SAM~2 protocol, plus a sixth notebook for the real-capture demo. The scene generator, the Gaussian-selection and deletion code, the mask construction, the scoring code, and all orchestration are written by the author; nerfstudio, diffusers/VACE, the ROSE inference script, and SAM~2 are used as unmodified third-party components. A \texttt{README} documents exact reproduction steps and the dependency pins that matter (a mid-project \texttt{transformers} upgrade silently broke ROSE's loader --- versions are now pinned in every notebook).
 
-\section{Experiments}
-All quantitative results are PSNR against the exact clean plates on the 11 held-out views, full-frame and restricted to the ground-truth footprint region, always after re-fitting a fresh 3DGS on the edited frames (Table~\ref{tab:main}).
+\section{Evaluation and Results}
+\label{sec:eval}
+
+\subsection{Metrics and protocol}
+\label{sec:metrics}
+Every experiment is scored the same way. The re-fitted (or edited) scene is rendered at the 11 held-out camera poses and compared against the exact clean plates:
+\[
+\mathrm{PSNR} = -10 \log_{10} \frac{1}{|\Omega|} \sum_{p \in \Omega} \lVert \hat{I}(p) - I_{\mathrm{clean}}(p) \rVert^2,
+\]
+with $\Omega$ either the full frame (\emph{PSNR full}) or the ground-truth footprint region (\emph{PSNR footprint}): pixels that changed between the with/without renders, excluding the object silhouette. Footprint PSNR is the honest number --- the footprint occupies a minority of pixels, so full-frame PSNR can look respectable while the shadow sits there untouched. Scores are computed per held-out frame and averaged. All removal rows are measured \emph{after} re-fitting a fresh 3DGS on the edited frames, i.e.\ they score what survives the lift to 3D, not the 2D edit. SSIM and LPIPS were computed for the reconstruction ceiling; for removal rows we report PSNR, which already separates the methods by an order of magnitude more than its noise.
 
 \subsection{Reconstruction quality (ceiling)}
-The Step-1 reconstruction reaches \textbf{45.7\,dB} PSNR (0.992 SSIM, 0.021 LPIPS) on held-out views of the with-object scene (Figure~\ref{fig:recon}). This matters for attribution: reconstruction error is negligible at the scale of every effect we measure below, so any later degradation is caused by removal, not by 3DGS fitting.
+The Step-1 reconstruction reaches \textbf{45.7\,dB} PSNR (0.992 SSIM, 0.021 LPIPS) on held-out views of the with-object scene (Figure~\ref{fig:recon}). This matters for attribution: reconstruction error is negligible at the scale of every effect measured below, so any later degradation is caused by removal, not by 3DGS fitting.
 
 \begin{figure}[t]
   \centering
@@ -109,7 +143,8 @@ The Step-1 reconstruction reaches \textbf{45.7\,dB} PSNR (0.992 SSIM, 0.021 LPIP
 \end{figure}
 
 \subsection{The problem, quantified (M1: deletion)}
-The deletion baseline selects the object's Gaussians by lifting the 2D object masks: a Gaussian is selected if its center projects inside the mask in ${\geq}90\%$ of the views that see it (${\geq}40$ views). Validated against the ground-truth sphere geometry, the 2{,}888 selected Gaussians achieve 100\% precision and 90\% recall; the missed 10\% are 318 interior Gaussians invisible from outside, which the geometric check adds to the deletion set. Deletion then does exactly what it promises: the sphere is gone, and its mirror image, shadow, and floor reflection remain, intact and sharp (Figure~\ref{fig:ghost}). Quantitatively: 23.1\,dB full-frame, \textbf{14.2\,dB} in the footprint --- the number the rest of the paper tries to raise.
+\label{sec:deletion}
+The deletion baseline must first find the object's Gaussians. We lift the 2D object masks: a Gaussian is selected if its center projects inside the mask in ${\geq}90\%$ of the views that see it (${\geq}40$ views). Validated against the ground-truth sphere geometry, the 2{,}888 selected Gaussians achieve 100\% precision and 90\% recall; the missed 10\% are 318 interior Gaussians invisible from outside, which a geometric check (known object placement, synthetic-only) adds to the deletion set. Deletion then does exactly what it promises: the sphere is gone, and its mirror image, shadow, and floor reflection remain, intact and sharp (Figure~\ref{fig:ghost}). Quantitatively: 23.1\,dB full-frame, \textbf{14.2\,dB} in the footprint --- the number the rest of the paper tries to raise.
 
 \begin{figure}[t]
   \centering
@@ -144,7 +179,7 @@ Walking the table: the two VACE rows sit at or \emph{below} deletion --- the gen
 
 \subsection{Why the generalist prior fails: substitution, not removal}
 \label{sec:substitution}
-VACE's failure is systematic and instructive (Figure~\ref{fig:vace}). Given the \emph{object mask}, it filled the hole with a gray sphere --- reconstructing the object it was asked to delete from the evidence left \emph{outside} the mask: the shadow and reflections. This is direct visual evidence that the footprint encodes the object, the physical-scene counterpart of Remove360's finding that residuals remain semantically revealing \cite{semanticresiduals}. Given the \emph{oracle mask} (footprint included), it substituted a cyan sphere --- and rendered a \emph{matching cyan reflection} in the mirror. The prior evidently understands object--reflection coupling; what it lacks is ``generate emptiness'' as an operation. Prompting cannot override the mask's shape prior: across three prompt variants, including an emptiness-dominant prompt at raised guidance, we obtained three different objects (gray, cyan, orange) and zero removals. We conclude that the masked region's shape acts as a strong object prior for a generation-trained model, and removal requires a prior trained for removal.
+VACE's failure is systematic and instructive (Figure~\ref{fig:vace}). Given the \emph{object mask}, it filled the hole with a gray sphere --- reconstructing the object it was asked to delete from the evidence left \emph{outside} the mask: the shadow and reflections. This is direct visual evidence that the footprint encodes the object, the physical-scene counterpart of Remove360's finding that residuals remain semantically revealing \cite{semanticresiduals}. Given the \emph{oracle mask} (footprint included), it substituted a cyan sphere --- and rendered a \emph{matching cyan reflection} in the mirror. The prior evidently understands object--reflection coupling; what it lacks is ``generate emptiness'' as an operation. Prompting cannot override the mask's shape prior: across three prompt variants, including an emptiness-dominant prompt at raised guidance (50 steps, scale 7.5), we obtained three different objects (gray, cyan, orange) and zero removals. We conclude that the masked region's shape acts as a strong object prior for a generation-trained model, and removal requires a prior trained for removal.
 
 \begin{figure}[t]
   \centering
@@ -189,8 +224,16 @@ The oracle mask uses ground-truth differencing, unavailable in any real scene. T
   \label{fig:final}
 \end{figure}
 
+% ---------------------------------------------------------------------------
+% REAL-CAPTURE DEMO SUBSECTION — uncomment and finalize once the garden
+% warm-start refit renders arrive (figures/fig9_garden_demo.png).
+% \subsection{Real-capture demo}
+% \label{sec:realdemo}
+% TODO: qualitative garden demo paragraph + figure.
+% ---------------------------------------------------------------------------
+
 \section{Limitations and Lessons}
-This study is deliberately narrow, and its limitations should be stated plainly. Everything is measured on a single synthetic scene with a single object; the camera arc spans $120^\circ$, so held-out views interpolate rather than extrapolate. The re-fit uses no keep-loss, so unedited regions may drift --- bounded, however, by the full-frame PSNR, which sits within 0.2\,dB of the footprint-driven gap. The oracle masks use ground truth, though the practical protocol matching them largely defuses this concern. Our metrics combine all footprint effects into one region; the per-effect masks (shadow vs.\ mirror image vs.\ bleed) already exist as a by-product of the differencing and splitting the table by effect is mechanical future work, as is adding SSIM/LPIPS to the removal rows (currently reported for the ceiling only) and a qualitative real-capture demo. The proposal's in-context-examples extension (conditioning the editor on a Blender before/after pair) was not run: it was designed to teach a generalist prior what removal means, and adopting ROSE --- a prior already trained for exactly that --- made it moot; we report this as a descoped promise rather than a finding.
+This study is deliberately narrow, and its limitations should be stated plainly. Everything quantitative is measured on a single synthetic scene with a single object; the camera arc spans $120^\circ$, so held-out views interpolate rather than extrapolate. The re-fit uses no keep-loss, so unedited regions may drift --- bounded, however, by the full-frame PSNR, which sits within 0.2\,dB of the footprint-driven gap. The oracle masks use ground truth, though the practical protocol matching them largely defuses this concern. Our metrics combine all footprint effects into one region; the per-effect masks (shadow vs.\ mirror image vs.\ bleed) already exist as a by-product of the differencing, and splitting the table by effect is mechanical future work, as is adding SSIM/LPIPS to the removal rows (currently reported for the ceiling only). The proposal's in-context-examples extension (conditioning the editor on a Blender before/after pair) was not run: it was designed to teach a generalist prior what removal means, and adopting ROSE --- a prior already trained for exactly that --- made it moot; we report this as a descoped promise rather than a finding.
 
 Two engineering lessons survived contact with the infrastructure: pin dependency versions inside every notebook (a transformers upgrade silently broke ROSE's loader mid-project), and when an experiment looks absurd, verify \emph{which inputs actually reached the model} before theorising --- our first ``VACE ignores the mask'' hypothesis was in fact a mask-video encoding bug.
 
@@ -222,5 +265,11 @@ All experiments and writing are by the author (solo project). Coding assistance 
 \bibitem{sam2} N. Ravi et al. \emph{SAM 2: Segment Anything in Images and Videos}. arXiv 2024.
 \bibitem{lighting} T. Kuchler, J.-F. Feiden, M. Nie{\ss}ner, C. Rother. \emph{Do Image Editing Models Understand Lighting?} 2026.
 \end{thebibliography}
+
+\appendix
+% The course allows attaching the original proposal as an appendix; include it
+% in the submission zip and reference it here if desired:
+% \section{Original Proposal}
+% Attached as submitted (July 2026).
 
 \end{document}

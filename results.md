@@ -63,9 +63,9 @@ frames** — i.e. they score what survives the lift back to 3D, not the 2D edit.
 
 - Numbers for phase 2 and M1 are persisted in the JSONs above; VACE/ROSE rows
   were computed in the phase-4 notebook's scoring cell (per-view PSNR printed
-  in-session). The ROSE+SAM2 refit checkpoint is **not yet persisted** — re-run
-  the refit+score cell on `checkpoints/phase4_rose/edited_rose_sam2mask/` to
-  regenerate it (~30–40 min Colab).
-- Figures: `figures/` (fig2, render-vs-GT, still needs a 10-min render from the
-  phase-2 checkpoint in Colab). Videos: `videos/` (before/after orbits,
+  in-session). All refit checkpoints and held-out test renders — including
+  ROSE+SAM2 (`out_rose_sam2mask` / `rt_rose_sam2mask`) and the phase-2 test
+  renders (`phase2_with/renders_test`) — are persisted on Drive under
+  `light-footprint-removal/checkpoints/` (re-run of 2026-08-08).
+- Figures: `figures/` (all eight). Videos: `videos/` (before/after orbits,
   side-by-side).

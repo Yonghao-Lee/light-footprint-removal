@@ -60,7 +60,7 @@ model's own points. Vase, disc, flowers, contact shadow and tabletop
 reflection removed together; no clean plates exist for a real scene, so this
 one is qualitative.
 
-![Garden before/after: original capture next to the same orbit with the vase removed](figures/garden_before_after.gif)
+![Garden before/after: original capture next to the same orbit with the vase removed](figures/garden_demo.gif)
 
 ## How it works
 

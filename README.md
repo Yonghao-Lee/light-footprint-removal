@@ -47,6 +47,17 @@ Two findings worth the read:
 Full numbers and per-experiment notes: [results.md](results.md). Full write-up:
 [report.pdf](report.pdf). Videos (orbits, masks, side-by-sides): [videos/](videos/).
 
+## Real-capture demo
+
+The same recipe on a real scene — Mip-NeRF 360 *garden*: four clicks (vase,
+metal disc, dried flowers), SAM 2 propagation, ROSE edit, then a refit that
+keeps the original render outside the mask and is seeded with the source
+model's own points. Vase, disc, flowers, contact shadow and tabletop
+reflection removed together; no clean plates exist for a real scene, so this
+one is qualitative.
+
+![Garden before/after: original capture next to the same orbit with the vase removed](figures/garden_before_after.gif)
+
 ## How it works
 
 1. **Reconstruct** — fit `splatfacto` (3DGS) to the scene images.

@@ -58,6 +58,15 @@ frames** — i.e. they score what survives the lift back to 3D, not the 2D edit.
   81 frames independently, yet the refit reaches 31.3 dB on held-out views —
   the 3D representation absorbs the residual disagreement at this operating
   point, so iterative dataset update / warped noise were not needed.
+- **Phase 6 — real-capture demo (qualitative)**: Mip-NeRF 360 garden; 4 clicks
+  (vase / metal disc / dried flowers) → SAM2 → ROSE → masked compositing
+  (original render outside the mask) → refit seeded with 400k points from the
+  source model, 30k iters. Object, shadow and tabletop reflection removed;
+  residual softness confined to the edited region. Assets:
+  `videos/garden_before_after.mp4`, `figures/fig9_garden_demo.png`,
+  Drive `checkpoints/phase6_realdemo/`. (A `--load-dir` warm-start refit was
+  abandoned: splatfacto re-allocates parameters on checkpoint load, orphaning
+  the optimizers — 45k iterations trained nothing.)
 
 ## Provenance
 
